@@ -31,17 +31,14 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Product URL to monitor
-URL = os.getenv(
-    "FLIPKART_URL",
-    "https://www.flipkart.com/motorola-signature-pantone-carbon-1-tb/p/itmf01b143b8663d?pid=MOBHGVJYGJYGSV8X&marketplace=FLIPKART&lid=LSTMOBHGVJYGJYGSV8XC1KZDR&q=motorola+signature&fm=organic&pageUID=1791398623697",
-)
+URL = os.getenv("FLIPKART_URL")
 CHECK_EVERY = float(os.getenv("CHECK_INTERVAL_SECONDS", "10"))  # Base interval in seconds
 AUTO_ADD_TO_CART = os.getenv("AUTO_ADD_TO_CART", "true").lower() in ("true", "1", "yes")
 PROFILE_DIR = "./flipkart_profile"   # Keeps your login session between runs
 
 # Telegram configuration (read from environment variables with defaults)
-TG_TOKEN = os.getenv("TG_TOKEN", "8890105613:AAGXt8iYinyP1cpI22sHVWS8_gbWhOrouXo")
-TG_CHAT = os.getenv("TG_CHAT", "947854787")  # Numeric chat ID for Telegram notifications
+TG_TOKEN = os.getenv("TG_TOKEN")
+TG_CHAT = os.getenv("TG_CHAT")  # Numeric chat ID for Telegram notifications
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
@@ -215,8 +212,8 @@ def main() -> None:
 
         while True:
             try:
-                page.goto(URL, wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_timeout(2500)
+                page.goto(URL, wait_until="domcontentloaded", timeout=25000)
+                page.wait_for_timeout(1000)
 
                 available = is_available(page)
                 timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
