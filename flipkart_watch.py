@@ -189,11 +189,22 @@ def main() -> None:
                 viewport={"width": 1366, "height": 768},
             )
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            print("Navigating to Flipkart for login...")
+            print("Navigating to Flipkart for login...", flush=True)
             page.goto("https://www.flipkart.com", wait_until="domcontentloaded")
-            input("\n-> Log in to Flipkart in the opened browser window, then press Enter here to save session...")
-            ctx.close()
-            print("Login session saved to profile directory.")
+            print("\n[LOGIN MODE] Please log in to Flipkart in the opened browser window.", flush=True)
+            print("[LOGIN MODE] Close the browser window when you are done to save your login session.\n", flush=True)
+            while True:
+                try:
+                    if page.is_closed():
+                        break
+                except Exception:
+                    break
+                time.sleep(1)
+            try:
+                ctx.close()
+            except Exception:
+                pass
+            print("Login session saved to profile directory.", flush=True)
             return
 
     was_available = False
