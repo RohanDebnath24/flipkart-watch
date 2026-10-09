@@ -1,0 +1,6 @@
+2026/10/09-16:08:16.314 6184 Reusing MANIFEST C:\Users\USER\Documents\antigravity\adventurous-darwin\flipkart_profile\Default\IndexedDB\https_www.flipkart.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/10/09-16:08:16.315 6184 Recovering log #163
+2026/10/09-16:08:16.319 6184 Reusing old log C:\Users\USER\Documents\antigravity\adventurous-darwin\flipkart_profile\Default\IndexedDB\https_www.flipkart.com_0.indexeddb.leveldb/000163.log 
+2026/10/09-16:08:41.289 6184 Level-0 table #168: started
+2026/10/09-16:08:41.309 6184 Level-0 table #168: 1985844 bytes OK
+2026/10/09-16:08:41.324 6184 Delete type=0 #163

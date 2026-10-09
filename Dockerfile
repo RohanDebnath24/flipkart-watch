@@ -9,8 +9,10 @@ EXPOSE 10000
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application script
+# Copy application scripts and profile session
 COPY flipkart_watch.py .
+COPY login_flipkart.py .
+COPY flipkart_profile ./flipkart_profile
 
 # Run unbuffered Python script
 CMD ["python", "-u", "flipkart_watch.py"]
