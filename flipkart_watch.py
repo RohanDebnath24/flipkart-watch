@@ -23,10 +23,7 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Product URL to monitor
-URL = os.getenv(
-    "FLIPKART_URL",
-    "https://www.flipkart.com/motorola-signature-pantone-carbon-1-tb/p/itmf01b143b8663d?pid=MOBHGVJYGJYGSV8X",
-)
+URL = os.getenv("FLIPKART_URL")
 CHECK_EVERY = float(os.getenv("CHECK_INTERVAL_SECONDS", "10"))  # Base interval in seconds
 HEARTBEAT_HOURS = float(os.getenv("HEARTBEAT_INTERVAL_HOURS", "6"))  # Health status report interval in hours
 REMINDER_INTERVAL_SECONDS = float(os.getenv("REMINDER_INTERVAL_SECONDS", "30"))  # Repeating alert interval when in stock
