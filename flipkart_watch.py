@@ -18,6 +18,9 @@ import re
 import sys
 import time
 import random
+import json
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import requests
 from playwright.sync_api import sync_playwright
 
@@ -32,8 +35,8 @@ URL = os.getenv(
     "FLIPKART_URL",
     "https://www.flipkart.com/motorola-signature-pantone-carbon-1-tb/p/itmf01b143b8663d?pid=MOBHGVJYGJYGSV8X&marketplace=FLIPKART&lid=LSTMOBHGVJYGJYGSV8XC1KZDR&q=motorola+signature&fm=organic&pageUID=1791398623697",
 )
-CHECK_EVERY = 10           # Base interval in seconds
-AUTO_ADD_TO_CART = True    # Set True to automatically click Add to Cart when available
+CHECK_EVERY = float(os.getenv("CHECK_INTERVAL_SECONDS", "10"))  # Base interval in seconds
+AUTO_ADD_TO_CART = os.getenv("AUTO_ADD_TO_CART", "true").lower() in ("true", "1", "yes")
 PROFILE_DIR = "./flipkart_profile"   # Keeps your login session between runs
 
 # Telegram configuration (read from environment variables with defaults)
@@ -45,6 +48,33 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 # Regex patterns for matching action buttons and stock status
 BUY_OR_ADD_REGEX = re.compile(r"^\s*(buy now|add to cart)\s*$", re.I)
 SOLD_OUT_REGEX = re.compile(r"sold out|currently unavailable|out of stock|coming soon|notify me", re.I)
+
+# Health status state dictionary for HTTP health checks on Render
+LATEST_STATUS = {
+    "status": "initializing",
+    "last_check": None,
+    "available": False,
+    "total_checks": 0,
+    "error_count": 0,
+}
+
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(LATEST_STATUS).encode("utf-8"))
+
+    def log_message(self, format, *args):
+        pass  # Quiet HTTP server logs
+
+
+def start_health_server(port: int) -> None:
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    print(f"[HealthCheck] Server running on port {port}", flush=True)
+    server.serve_forever()
+
 
 
 def notify(msg: str) -> None:
@@ -141,6 +171,16 @@ def main() -> None:
     login_mode = "--login" in sys.argv
     print(f"Starting Flipkart Stock Watcher [Mode: {'Login' if login_mode else 'Watcher'}]...")
     
+    # Start health check server if PORT environment variable is set (e.g. Render Web Service)
+    port_env = os.getenv("PORT")
+    if port_env:
+        try:
+            port = int(port_env)
+            t = threading.Thread(target=start_health_server, args=(port,), daemon=True)
+            t.start()
+        except Exception as e:
+            print(f"[HealthCheck] Failed to start HTTP server: {e}")
+
     os.makedirs(PROFILE_DIR, exist_ok=True)
 
     with sync_playwright() as p:
@@ -154,6 +194,8 @@ def main() -> None:
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
             ],
         )
         ctx.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -168,7 +210,7 @@ def main() -> None:
             return
 
         was_available = False
-        print(f"Monitoring product: {URL}")
+        print(f"Monitoring product every {CHECK_EVERY}s: {URL}")
         print("Press Ctrl+C to stop watcher.\n")
 
         while True:
@@ -179,7 +221,14 @@ def main() -> None:
                 available = is_available(page)
                 timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
                 status_str = "AVAILABLE [IN STOCK]" if available else "NOT AVAILABLE [OUT OF STOCK]"
-                print(f"[{timestamp}] Status: {status_str}")
+                print(f"[{timestamp}] Status: {status_str}", flush=True)
+
+                LATEST_STATUS.update({
+                    "status": "running",
+                    "last_check": timestamp,
+                    "available": available,
+                    "total_checks": LATEST_STATUS["total_checks"] + 1,
+                })
 
                 if available and not was_available:
                     msg = f"🚀 IN STOCK on Flipkart!\nURL: {URL}"
@@ -190,10 +239,12 @@ def main() -> None:
                 was_available = available
 
             except Exception as e:
-                print(f"[{time.strftime('%H:%M:%S')}] Check error: {e}")
+                print(f"[{time.strftime('%H:%M:%S')}] Check error: {e}", flush=True)
+                LATEST_STATUS["error_count"] += 1
 
             sleep_time = CHECK_EVERY + random.uniform(-1.5, 1.5)
             time.sleep(max(2.0, sleep_time))
+
 
 
 if __name__ == "__main__":

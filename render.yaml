@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: flipkart-watch
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: CHECK_INTERVAL_SECONDS
+        value: "10"
+      - key: FLIPKART_URL
+        sync: false
+      - key: TG_TOKEN
+        sync: false
+      - key: TG_CHAT
+        sync: false
+      - key: AUTO_ADD_TO_CART
+        value: "true"
