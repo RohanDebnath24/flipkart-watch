@@ -154,7 +154,10 @@ def add_to_cart_playwright(url: str) -> bool:
             page.goto(url, wait_until="domcontentloaded", timeout=25000)
             btn = page.locator("button, a, div, span").filter(has_text=re.compile(r"^(?:add to cart|buy now)$", re.I)).last
             if btn.is_visible(timeout=5000):
-                btn.click(timeout=5000)
+                try:
+                    btn.click(force=True, timeout=5000)
+                except Exception:
+                    btn.evaluate("el => el.click()")
                 page.wait_for_timeout(2000)
                 print("Successfully clicked Add to Cart / Buy Now!", flush=True)
                 ctx.close()
