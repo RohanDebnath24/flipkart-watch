@@ -178,6 +178,9 @@ def main() -> None:
     print(f"Monitoring product every {CHECK_EVERY}s: {URL}", flush=True)
     print("Press Ctrl+C to stop watcher.\n", flush=True)
 
+    # Send startup confirmation notification to Telegram
+    notify("🟢 Flipkart Stock Watcher connected successfully! 24/7 Monitoring Active.")
+
     while True:
         try:
             available, status_details = check_stock_fast(URL)
