@@ -31,7 +31,8 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Product URL to monitor
-URL = os.getenv("FLIPKART_URL")
+URL = os.getenv(
+    "FLIPKART_URL")
 CHECK_EVERY = float(os.getenv("CHECK_INTERVAL_SECONDS", "10"))  # Base interval in seconds
 AUTO_ADD_TO_CART = os.getenv("AUTO_ADD_TO_CART", "true").lower() in ("true", "1", "yes")
 PROFILE_DIR = "./flipkart_profile"   # Keeps your login session between runs
