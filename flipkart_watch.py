@@ -28,6 +28,7 @@ URL = os.getenv(
     "https://www.flipkart.com/motorola-signature-pantone-carbon-1-tb/p/itmf01b143b8663d?pid=MOBHGVJYGJYGSV8X",
 )
 CHECK_EVERY = float(os.getenv("CHECK_INTERVAL_SECONDS", "10"))  # Base interval in seconds
+HEARTBEAT_HOURS = float(os.getenv("HEARTBEAT_INTERVAL_HOURS", "6"))  # Health status report interval in hours
 AUTO_ADD_TO_CART = os.getenv("AUTO_ADD_TO_CART", "true").lower() in ("true", "1", "yes")
 PROFILE_DIR = "./flipkart_profile"   # Keeps your login session between runs
 
@@ -175,6 +176,7 @@ def main() -> None:
             return
 
     was_available = False
+    last_heartbeat = time.time()
     print(f"Monitoring product every {CHECK_EVERY}s: {URL}", flush=True)
     print("Press Ctrl+C to stop watcher.\n", flush=True)
 
@@ -193,6 +195,19 @@ def main() -> None:
                 "available": available,
                 "total_checks": LATEST_STATUS["total_checks"] + 1,
             })
+
+            # Send periodic Telegram heartbeat status update every HEARTBEAT_HOURS (default 6 hours)
+            current_time = time.time()
+            if (current_time - last_heartbeat) >= (HEARTBEAT_HOURS * 3600):
+                hb_msg = (
+                    f"💚 Flipkart Watcher {HEARTBEAT_HOURS:.0f}-Hour Health Check\n"
+                    f"• Status: 🟢 Monitoring Active\n"
+                    f"• Checks Completed: {LATEST_STATUS['total_checks']}\n"
+                    f"• Error Count: {LATEST_STATUS['error_count']}\n"
+                    f"• Product: {URL}"
+                )
+                notify(hb_msg)
+                last_heartbeat = current_time
 
             if available and not was_available:
                 msg = f"🚀 IN STOCK on Flipkart!\nURL: {URL}"
