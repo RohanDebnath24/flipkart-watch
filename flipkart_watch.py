@@ -29,6 +29,7 @@ URL = os.getenv(
 )
 CHECK_EVERY = float(os.getenv("CHECK_INTERVAL_SECONDS", "10"))  # Base interval in seconds
 HEARTBEAT_HOURS = float(os.getenv("HEARTBEAT_INTERVAL_HOURS", "6"))  # Health status report interval in hours
+REMINDER_INTERVAL_SECONDS = float(os.getenv("REMINDER_INTERVAL_SECONDS", "30"))  # Repeating alert interval when in stock
 AUTO_ADD_TO_CART = os.getenv("AUTO_ADD_TO_CART", "true").lower() in ("true", "1", "yes")
 PROFILE_DIR = "./flipkart_profile"   # Keeps your login session between runs
 
@@ -177,6 +178,7 @@ def main() -> None:
 
     was_available = False
     last_heartbeat = time.time()
+    last_in_stock_reminder = 0.0
     print(f"Monitoring product every {CHECK_EVERY}s: {URL}", flush=True)
     print("Press Ctrl+C to stop watcher.\n", flush=True)
 
@@ -196,8 +198,9 @@ def main() -> None:
                 "total_checks": LATEST_STATUS["total_checks"] + 1,
             })
 
-            # Send periodic Telegram heartbeat status update every HEARTBEAT_HOURS (default 6 hours)
             current_time = time.time()
+
+            # Send periodic Telegram heartbeat status update every HEARTBEAT_HOURS (default 6 hours)
             if (current_time - last_heartbeat) >= (HEARTBEAT_HOURS * 3600):
                 hb_msg = (
                     f"💚 Flipkart Watcher {HEARTBEAT_HOURS:.0f}-Hour Health Check\n"
@@ -209,11 +212,24 @@ def main() -> None:
                 notify(hb_msg)
                 last_heartbeat = current_time
 
-            if available and not was_available:
-                msg = f"🚀 IN STOCK on Flipkart!\nURL: {URL}"
-                if AUTO_ADD_TO_CART and add_to_cart_playwright(URL):
-                    msg += "\n🛒 Added to cart automatically! Complete your order now."
-                notify(msg)
+            # Handle stock notifications & repeating 30-second reminders while in stock
+            if available:
+                if not was_available:
+                    msg = f"🚀 IN STOCK on Flipkart!\nURL: {URL}"
+                    if AUTO_ADD_TO_CART and add_to_cart_playwright(URL):
+                        msg += "\n🛒 Added to cart automatically! Complete your order now."
+                    notify(msg)
+                    last_in_stock_reminder = current_time
+                elif (current_time - last_in_stock_reminder) >= REMINDER_INTERVAL_SECONDS:
+                    reminder_msg = (
+                        f"🚨 URGENT REMINDER: Product is STILL IN STOCK on Flipkart!\n"
+                        f"Have you completed your order yet?\n"
+                        f"URL: {URL}"
+                    )
+                    notify(reminder_msg)
+                    last_in_stock_reminder = current_time
+            elif was_available and not available:
+                notify(f"ℹ️ Product went back OUT OF STOCK on Flipkart.\nURL: {URL}")
 
             was_available = available
 
