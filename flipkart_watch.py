@@ -22,8 +22,9 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# Product URL to monitor
-URL = os.getenv("FLIPKART_URL")
+# Product URL to monitor (defaults to Motorola Signature 512GB)
+DEFAULT_URL = "https://www.flipkart.com/motorola-signature-pantone-carbon-512-gb/p/itm5cf2347de817a?pid=MOBHGVJYGVP6G2NY"
+URL = os.getenv("FLIPKART_URL", DEFAULT_URL)
 CHECK_EVERY = float(os.getenv("CHECK_INTERVAL_SECONDS", "10"))  # Base interval in seconds
 HEARTBEAT_HOURS = float(os.getenv("HEARTBEAT_INTERVAL_HOURS", "6"))  # Health status report interval in hours
 REMINDER_INTERVAL_SECONDS = float(os.getenv("REMINDER_INTERVAL_SECONDS", "30"))  # Repeating alert interval when in stock
@@ -91,27 +92,49 @@ def check_stock_fast(url: str) -> tuple[bool, str]:
     Lightning-fast HTTP stock check (takes ~0.5 seconds).
     Returns (is_available, status_message).
     """
+    if not url:
+        return False, "Error: No product URL specified."
+
     headers = {
         "User-Agent": USER_AGENT,
         "Accept-Language": "en-US,en;q=0.9",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
-    resp = requests.get(url, headers=headers, timeout=12)
-    if resp.status_code != 200:
-        return False, f"HTTP Status {resp.status_code}"
+    try:
+        resp = requests.get(url, headers=headers, timeout=12)
+        if resp.status_code != 200:
+            return False, f"HTTP Status {resp.status_code}"
 
-    html = resp.text
-    # Fast regex match on page HTML
-    has_buy = bool(re.search(r'button[^>]*>(?:[^<]*\s*)?(?:buy now|add to cart)|"buyNow"|"addToCart"|text=/buy now|add to cart/i', html, re.I))
-    has_oos = bool(re.search(r'sold out|currently unavailable|out of stock|coming soon', html, re.I))
+        html = resp.text
+        
+        # Primary buy/cart action indicators for the target product
+        has_buy_action = bool(
+            re.search(r'"productActionButtonType"\s*:\s*"(?:BUY_NOW|ADD_TO_CART)"', html, re.I) or
+            re.search(r'"clickAction"\s*:\s*"(?:BUY_NOW|ADD_TO_CART)"', html, re.I) or
+            re.search(r'>(?:Buy\s*now|Add\s*to\s*cart)<', html, re.I) or
+            re.search(r'button[^>]*>(?:[^<]*\s*)?(?:buy now|add to cart)', html, re.I)
+        )
 
-    if has_buy and not has_oos:
-        return True, "AVAILABLE [IN STOCK]"
-    return False, "NOT AVAILABLE [OUT OF STOCK]"
+        # Check if primary product action is replaced by NOTIFY_ME (out of stock indicator)
+        has_notify_me = bool(
+            re.search(r'"productActionButtonType"\s*:\s*"NOTIFY_ME"', html, re.I) or
+            re.search(r'>(?:Notify\s*Me)<', html, re.I)
+        )
+
+        if has_buy_action and not has_notify_me:
+            return True, "AVAILABLE [IN STOCK]"
+        elif has_notify_me:
+            return False, "NOT AVAILABLE [OUT OF STOCK] (Notify Me active)"
+
+        return False, "NOT AVAILABLE [OUT OF STOCK]"
+    except Exception as e:
+        return False, f"Check error: {e}"
 
 
 def add_to_cart_playwright(url: str) -> bool:
     """Launches Playwright headless context to execute Add to Cart."""
+    if not url:
+        return False
     try:
         with sync_playwright() as p:
             ctx = p.chromium.launch_persistent_context(
@@ -129,16 +152,16 @@ def add_to_cart_playwright(url: str) -> bool:
             )
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.goto(url, wait_until="domcontentloaded", timeout=25000)
-            btn = page.locator("button, a, div, li").filter(has_text=re.compile(r"add to cart", re.I)).first
-            if btn.is_visible(timeout=3000):
+            btn = page.locator("button, a, div, li").filter(has_text=re.compile(r"add to cart|buy now", re.I)).first
+            if btn.is_visible(timeout=5000):
                 btn.click(timeout=5000)
                 page.wait_for_timeout(2000)
-                print("Successfully clicked Add to Cart!", flush=True)
+                print("Successfully clicked Add to Cart / Buy Now!", flush=True)
                 ctx.close()
                 return True
             ctx.close()
     except Exception as e:
-        print("Add to cart error:", e, flush=True)
+        print(f"Add to cart error: {e}", flush=True)
     return False
 
 
@@ -209,12 +232,18 @@ def main() -> None:
                 notify(hb_msg)
                 last_heartbeat = current_time
 
-            # Handle stock notifications & repeating 30-second reminders while in stock
+            # Handle stock notifications & repeating reminders while in stock
             if available:
                 if not was_available:
                     msg = f"🚀 IN STOCK on Flipkart!\nURL: {URL}"
-                    if AUTO_ADD_TO_CART and add_to_cart_playwright(URL):
-                        msg += "\n🛒 Added to cart automatically! Complete your order now."
+                    if AUTO_ADD_TO_CART:
+                        try:
+                            if add_to_cart_playwright(URL):
+                                msg += "\n🛒 Added to cart automatically! Complete your order now."
+                            else:
+                                msg += "\n⚠️ Auto add-to-cart attempt finished (manual order recommended)."
+                        except Exception as cart_err:
+                            print(f"[AutoCart Exception]: {cart_err}", flush=True)
                     notify(msg)
                     last_in_stock_reminder = current_time
                 elif (current_time - last_in_stock_reminder) >= REMINDER_INTERVAL_SECONDS:
